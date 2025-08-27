@@ -1,0 +1,116 @@
+import Kyber512Module from './kyber512_wasm.js';
+
+export class Kyber512 {
+  constructor() {
+    this.module = null;
+    this.ready = false;
+  }
+
+  async init() {
+    if (this.ready) return;
+    
+    this.module = await Kyber512Module();
+    
+    // Module is ready when it's loaded (based on debug test)
+    if (typeof this.module._malloc !== 'function') {
+      throw new Error('WASM module not properly initialized - malloc unavailable');
+    }
+    
+    this.ready = true;
+  }
+
+  keypair() {
+    if (!this.ready) throw new Error('Module not initialized. Call init() first.');
+    
+    const pkPtr = this.module._malloc(800);
+    const skPtr = this.module._malloc(1632);
+    
+    try {
+      const result = this.module._kyber512_keypair(pkPtr, skPtr);
+      if (result !== 0) throw new Error('Key generation failed');
+      
+      // Read data using getValue (convert signed to unsigned)
+      const publicKey = new Uint8Array(800);
+      const secretKey = new Uint8Array(1632);
+      for (let i = 0; i < 800; i++) {
+        publicKey[i] = this.module.getValue(pkPtr + i, 'i8') & 0xFF;
+      }
+      for (let i = 0; i < 1632; i++) {
+        secretKey[i] = this.module.getValue(skPtr + i, 'i8') & 0xFF;
+      }
+      
+      return { publicKey, secretKey };
+    } finally {
+      this.module._free(pkPtr);
+      this.module._free(skPtr);
+    }
+  }
+
+  encapsulate(publicKey) {
+    if (!this.ready) throw new Error('Module not initialized. Call init() first.');
+    if (!(publicKey instanceof Uint8Array)) throw new Error('Public key must be Uint8Array');
+    if (publicKey.length !== 800) throw new Error('Invalid public key length. Expected 800 bytes.');
+    
+    const pkPtr = this.module._malloc(800);
+    const ctPtr = this.module._malloc(768);
+    const ssPtr = this.module._malloc(32);
+    
+    try {
+      // Write public key using writeArrayToMemory
+      this.module.writeArrayToMemory(publicKey, pkPtr);
+      
+      const result = this.module._kyber512_enc(ctPtr, ssPtr, pkPtr);
+      if (result !== 0) throw new Error('Encapsulation failed');
+      
+      // Read results using getValue (convert signed to unsigned)
+      const ciphertext = new Uint8Array(768);
+      const sharedSecret = new Uint8Array(32);
+      for (let i = 0; i < 768; i++) {
+        ciphertext[i] = this.module.getValue(ctPtr + i, 'i8') & 0xFF;
+      }
+      for (let i = 0; i < 32; i++) {
+        sharedSecret[i] = this.module.getValue(ssPtr + i, 'i8') & 0xFF;
+      }
+      
+      return { ciphertext, sharedSecret };
+    } finally {
+      this.module._free(pkPtr);
+      this.module._free(ctPtr);
+      this.module._free(ssPtr);
+    }
+  }
+
+  decapsulate(ciphertext, secretKey) {
+    if (!this.ready) throw new Error('Module not initialized. Call init() first.');
+    if (!(ciphertext instanceof Uint8Array)) throw new Error('Ciphertext must be Uint8Array');
+    if (!(secretKey instanceof Uint8Array)) throw new Error('Secret key must be Uint8Array');
+    if (ciphertext.length !== 768) throw new Error('Invalid ciphertext length. Expected 768 bytes.');
+    if (secretKey.length !== 1632) throw new Error('Invalid secret key length. Expected 1632 bytes.');
+    
+    const ctPtr = this.module._malloc(768);
+    const skPtr = this.module._malloc(1632);
+    const ssPtr = this.module._malloc(32);
+    
+    try {
+      // Write input data using writeArrayToMemory
+      this.module.writeArrayToMemory(ciphertext, ctPtr);
+      this.module.writeArrayToMemory(secretKey, skPtr);
+      
+      const result = this.module._kyber512_dec(ssPtr, ctPtr, skPtr);
+      if (result !== 0) throw new Error('Decapsulation failed');
+      
+      // Read result using getValue (convert signed to unsigned)
+      const sharedSecret = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) {
+        sharedSecret[i] = this.module.getValue(ssPtr + i, 'i8') & 0xFF;
+      }
+      return sharedSecret;
+    } finally {
+      this.module._free(ctPtr);
+      this.module._free(skPtr);
+      this.module._free(ssPtr);
+    }
+  }
+}
+
+export default Kyber512;

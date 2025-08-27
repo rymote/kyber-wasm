@@ -1,0 +1,39 @@
+{
+  "name": "kyber-wasm",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "types": "kyber.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "types": "./kyber.d.ts"
+    },
+    "./kyber512": {
+      "import": "./kyber512.js",
+      "types": "./kyber.d.ts"
+    },
+    "./kyber768": {
+      "import": "./kyber768.js", 
+      "types": "./kyber.d.ts"
+    },
+    "./kyber1024": {
+      "import": "./kyber1024.js",
+      "types": "./kyber.d.ts"
+    }
+  },
+  "files": [
+    "*.js",
+    "*.wasm",
+    "*.d.ts"
+  ],
+  "keywords": [
+    "kyber",
+    "post-quantum",
+    "cryptography",
+    "wasm",
+    "webassembly",
+    "pqc"
+  ],
+  "description": "Kyber post-quantum cryptography compiled to WebAssembly"
+}

@@ -1,0 +1,81 @@
+// Example usage of Kyber WASM implementations
+import { Kyber512, Kyber768, Kyber1024 } from './index.js';
+
+async function testKyber512() {
+  console.log('Testing Kyber512...');
+  
+  const kyber512 = new Kyber512();
+  await kyber512.init();
+  
+  const keypair = kyber512.keypair();
+  console.log(`Public key: ${keypair.publicKey.length} bytes`);
+  console.log(`Secret key: ${keypair.secretKey.length} bytes`);
+  
+  const encResult = kyber512.encapsulate(keypair.publicKey);
+  console.log(`Ciphertext: ${encResult.ciphertext.length} bytes`);
+  console.log(`Shared secret: ${encResult.sharedSecret.length} bytes`);
+  
+  const decryptedSecret = kyber512.decapsulate(encResult.ciphertext, keypair.secretKey);
+  console.log(`Decrypted secret: ${decryptedSecret.length} bytes`);
+  
+  const match = encResult.sharedSecret.every((byte, i) => byte === decryptedSecret[i]);
+  console.log(`Secrets match: ${match ? '✓' : '✗'}\n`);
+}
+
+async function testKyber768() {
+  console.log('Testing Kyber768...');
+  
+  const kyber768 = new Kyber768();
+  await kyber768.init();
+  
+  const keypair = kyber768.keypair();
+  console.log(`Public key: ${keypair.publicKey.length} bytes`);
+  console.log(`Secret key: ${keypair.secretKey.length} bytes`);
+  
+  const encResult = kyber768.encapsulate(keypair.publicKey);
+  console.log(`Ciphertext: ${encResult.ciphertext.length} bytes`);
+  console.log(`Shared secret: ${encResult.sharedSecret.length} bytes`);
+  
+  const decryptedSecret = kyber768.decapsulate(encResult.ciphertext, keypair.secretKey);
+  console.log(`Decrypted secret: ${decryptedSecret.length} bytes`);
+  
+  const match = encResult.sharedSecret.every((byte, i) => byte === decryptedSecret[i]);
+  console.log(`Secrets match: ${match ? '✓' : '✗'}\n`);
+}
+
+async function testKyber1024() {
+  console.log('Testing Kyber1024...');
+  
+  const kyber1024 = new Kyber1024();
+  await kyber1024.init();
+  
+  const keypair = kyber1024.keypair();
+  console.log(`Public key: ${keypair.publicKey.length} bytes`);
+  console.log(`Secret key: ${keypair.secretKey.length} bytes`);
+  
+  const encResult = kyber1024.encapsulate(keypair.publicKey);
+  console.log(`Ciphertext: ${encResult.ciphertext.length} bytes`);
+  console.log(`Shared secret: ${encResult.sharedSecret.length} bytes`);
+  
+  const decryptedSecret = kyber1024.decapsulate(encResult.ciphertext, keypair.secretKey);
+  console.log(`Decrypted secret: ${decryptedSecret.length} bytes`);
+  
+  const match = encResult.sharedSecret.every((byte, i) => byte === decryptedSecret[i]);
+  console.log(`Secrets match: ${match ? '✓' : '✗'}\n`);
+}
+
+async function runAllTests() {
+  console.log('🔐 Kyber WASM Example\n');
+  
+  try {
+    await testKyber512();
+    await testKyber768();
+    await testKyber1024();
+    
+    console.log('🎉 All tests completed successfully!');
+  } catch (error) {
+    console.error('❌ Error:', error.message);
+  }
+}
+
+runAllTests();

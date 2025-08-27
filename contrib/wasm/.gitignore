@@ -1,0 +1,24 @@
+# Build output
+dist/
+
+# Node modules
+node_modules/
+
+# Debug files
+*.log
+*.map
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp

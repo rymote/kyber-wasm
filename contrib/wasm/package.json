@@ -1,0 +1,75 @@
+{
+  "name": "@rymote/kyber-wasm",
+  "version": "1.0.0",
+  "description": "Kyber post-quantum cryptography compiled to WebAssembly for browser and Node.js",
+  "author": "Rymote <hi@rymote.io> (https://rymote.io/)",
+  "private": false,
+  "license": "CC0-1.0",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/kyber.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/kyber.d.ts"
+    },
+    "./kyber512": {
+      "import": "./dist/kyber512.js",
+      "types": "./dist/kyber.d.ts"
+    },
+    "./kyber768": {
+      "import": "./dist/kyber768.js", 
+      "types": "./dist/kyber.d.ts"
+    },
+    "./kyber1024": {
+      "import": "./dist/kyber1024.js",
+      "types": "./dist/kyber.d.ts"
+    }
+  },
+  "files": [
+    "dist/**/*",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "make -f build.mk",
+    "clean": "make -f build.mk clean",
+    "test": "cd dist && node example.js",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "kyber",
+    "post-quantum",
+    "cryptography",
+    "pqc",
+    "wasm",
+    "webassembly",
+    "kem",
+    "key-encapsulation",
+    "crypto",
+    "security",
+    "quantum-resistant"
+  ],
+  "funding": [
+    {
+      "type": "patreon",
+      "url": "https://patreon.com/rymote"
+    },
+    {
+      "type": "opencollective",
+      "url": "https://opencollective.com/rymote"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rymote/kyber-wasm.git",
+    "directory": "contrib/wasm"
+  },
+  "bugs": {
+    "url": "https://github.com/rymote/kyber-wasm/issues"
+  },
+  "homepage": "https://github.com/rymote/kyber-wasm#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

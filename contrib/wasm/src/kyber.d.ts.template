@@ -1,0 +1,110 @@
+// TypeScript definitions for Kyber WASM modules
+
+export interface KeyPair {
+  publicKey: Uint8Array;
+  secretKey: Uint8Array;
+}
+
+export interface EncapsulationResult {
+  ciphertext: Uint8Array;
+  sharedSecret: Uint8Array;
+}
+
+export declare class Kyber512 {
+  constructor();
+  
+  /**
+   * Initialize the WASM module. Must be called before any other operations.
+   */
+  init(): Promise<void>;
+  
+  /**
+   * Generate a Kyber512 key pair.
+   * @returns Key pair with 800-byte public key and 1632-byte secret key
+   */
+  keypair(): KeyPair;
+  
+  /**
+   * Encapsulate a shared secret using Kyber512.
+   * @param publicKey - 800-byte public key
+   * @returns Encapsulation result with 768-byte ciphertext and 32-byte shared secret
+   */
+  encapsulate(publicKey: Uint8Array): EncapsulationResult;
+  
+  /**
+   * Decapsulate a shared secret using Kyber512.
+   * @param ciphertext - 768-byte ciphertext
+   * @param secretKey - 1632-byte secret key
+   * @returns 32-byte shared secret
+   */
+  decapsulate(ciphertext: Uint8Array, secretKey: Uint8Array): Uint8Array;
+}
+
+export declare class Kyber768 {
+  constructor();
+  
+  /**
+   * Initialize the WASM module. Must be called before any other operations.
+   */
+  init(): Promise<void>;
+  
+  /**
+   * Generate a Kyber768 key pair.
+   * @returns Key pair with 1184-byte public key and 2400-byte secret key
+   */
+  keypair(): KeyPair;
+  
+  /**
+   * Encapsulate a shared secret using Kyber768.
+   * @param publicKey - 1184-byte public key
+   * @returns Encapsulation result with 1088-byte ciphertext and 32-byte shared secret
+   */
+  encapsulate(publicKey: Uint8Array): EncapsulationResult;
+  
+  /**
+   * Decapsulate a shared secret using Kyber768.
+   * @param ciphertext - 1088-byte ciphertext
+   * @param secretKey - 2400-byte secret key
+   * @returns 32-byte shared secret
+   */
+  decapsulate(ciphertext: Uint8Array, secretKey: Uint8Array): Uint8Array;
+}
+
+export declare class Kyber1024 {
+  constructor();
+  
+  /**
+   * Initialize the WASM module. Must be called before any other operations.
+   */
+  init(): Promise<void>;
+  
+  /**
+   * Generate a Kyber1024 key pair.
+   * @returns Key pair with 1568-byte public key and 3168-byte secret key
+   */
+  keypair(): KeyPair;
+  
+  /**
+   * Encapsulate a shared secret using Kyber1024.
+   * @param publicKey - 1568-byte public key
+   * @returns Encapsulation result with 1568-byte ciphertext and 32-byte shared secret
+   */
+  encapsulate(publicKey: Uint8Array): EncapsulationResult;
+  
+  /**
+   * Decapsulate a shared secret using Kyber1024.
+   * @param ciphertext - 1568-byte ciphertext
+   * @param secretKey - 3168-byte secret key
+   * @returns 32-byte shared secret
+   */
+  decapsulate(ciphertext: Uint8Array, secretKey: Uint8Array): Uint8Array;
+}
+
+// Default export includes all classes
+declare const kyber: {
+  Kyber512: typeof Kyber512;
+  Kyber768: typeof Kyber768;
+  Kyber1024: typeof Kyber1024;
+};
+
+export default kyber;

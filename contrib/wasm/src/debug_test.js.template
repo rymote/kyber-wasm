@@ -1,0 +1,74 @@
+// Debug test to understand what's happening with WASM module
+import Kyber512Module from './kyber512_wasm.js';
+
+async function debugTest() {
+  console.log('Starting debug test...');
+  
+  try {
+    console.log('1. Loading module...');
+    const module = await Kyber512Module();
+    console.log('2. Module loaded:', typeof module);
+    console.log('3. Module properties:', Object.keys(module).slice(0, 10));
+    
+    console.log('4. Checking calledRun:', module.calledRun);
+    console.log('5. Checking HEAPU8:', !!module.HEAPU8);
+    console.log('6. Checking _malloc:', typeof module._malloc);
+    
+    if (!module.calledRun) {
+      console.log('7. Waiting for runtime initialization...');
+      await new Promise(resolve => {
+        module.onRuntimeInitialized = () => {
+          console.log('8. Runtime initialized!');
+          resolve();
+        };
+      });
+    }
+    
+    console.log('9. After init - HEAPU8:', !!module.HEAPU8);
+    console.log('10. After init - _malloc:', typeof module._malloc);
+    console.log('11. Module buffer property:', !!module.buffer);
+    console.log('12. Module memory property:', !!module.memory);
+    console.log('13. Module wasmMemory property:', !!module.wasmMemory);
+    
+    // List all properties that might be memory related
+    const memoryProps = Object.keys(module).filter(key => 
+      key.toLowerCase().includes('mem') || 
+      key.toLowerCase().includes('heap') || 
+      key.toLowerCase().includes('buffer')
+    );
+    console.log('14. Memory-related properties:', memoryProps);
+    
+    if (module._malloc) {
+      console.log('15. Testing malloc...');
+      const ptr = module._malloc(32);
+      console.log('16. Malloc result:', ptr);
+      
+      if (ptr) {
+        // Try to access memory different ways
+        console.log('17. Testing writeArrayToMemory...');
+        const testData = new Uint8Array([1, 2, 3, 4]);
+        try {
+          module.writeArrayToMemory(testData, ptr);
+          console.log('17a. writeArrayToMemory successful');
+          
+          // Try getValue to read back
+          const val0 = module.getValue(ptr, 'i8');
+          const val1 = module.getValue(ptr + 1, 'i8');
+          console.log('17b. Read back values:', val0, val1);
+        } catch (e) {
+          console.log('17c. writeArrayToMemory failed:', e.message);
+        }
+        
+        module._free(ptr);
+        console.log('18. Free successful');
+      }
+    }
+    
+    console.log('✓ Debug test completed successfully');
+    
+  } catch (error) {
+    console.error('❌ Debug test failed:', error);
+  }
+}
+
+debugTest();
