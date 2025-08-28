@@ -93,7 +93,6 @@ jobs:
         working-directory: contrib/wasm
         run: |
           echo "Building WASM modules..."
-          npm ci
           npm run build
           echo "Build completed. Contents of dist:"
           ls -la dist/
