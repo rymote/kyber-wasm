@@ -4,7 +4,7 @@ EMCFLAGS = -O3 -Wall -Wextra -Wpedantic -Wmissing-prototypes -Wredundant-decls \
   -Wshadow -Wpointer-arith -fomit-frame-pointer
 WASMFLAGS = -s WASM=1 -s MODULARIZE=1 -s EXPORT_ES6=1 \
   -s EXPORTED_RUNTIME_METHODS='["cwrap","ccall","getValue","setValue","writeArrayToMemory"]' \
-  -s EXPORTED_FUNCTIONS='["_malloc","_free","_kyber512_keypair","_kyber768_keypair","_kyber1024_keypair","_kyber512_enc","_kyber768_enc","_kyber1024_enc","_kyber512_dec","_kyber768_dec","_kyber1024_dec"]' \
+  -s EXPORTED_FUNCTIONS='["_malloc","_free","_kyber512_keypair","_kyber768_keypair","_kyber1024_keypair","_kyber512_enc","_kyber768_enc","_kyber1024_enc","_kyber512_dec","_kyber768_dec","_kyber1024_dec","_kyber512_keypair_seeded","_kyber768_keypair_seeded","_kyber1024_keypair_seeded","_kyber512_enc_seeded","_kyber768_enc_seeded","_kyber1024_enc_seeded"]' \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s ENVIRONMENT=node,web
 

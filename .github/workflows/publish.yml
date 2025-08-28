@@ -24,7 +24,6 @@ jobs:
           fetch-depth: 0
 
       - name: Extract version from tag or input
-        id: extract_version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
@@ -34,139 +33,123 @@ jobs:
 
       - name: Cache Emscripten
         uses: actions/cache@v3
-        id: cache-emsdk
         with:
           path: emsdk
-          key: emsdk-${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
-          restore-keys: |
-            emsdk-${{ runner.os }}-
+          key: emsdk-${{ runner.os }}-latest
+          restore-keys: emsdk-${{ runner.os }}-
 
       - name: Setup Emscripten
         run: |
           if [ ! -d "emsdk" ]; then
-            # Install Emscripten manually for better reliability
             git clone https://github.com/emscripten-core/emsdk.git
             cd emsdk
             ./emsdk install latest
             ./emsdk activate latest
           else
-            # Use cached version
             cd emsdk
             ./emsdk activate latest
           fi
           source ./emsdk_env.sh
-          # Add to PATH for subsequent steps
           echo "$(pwd)" >> $GITHUB_PATH
           echo "$(pwd)/upstream/emscripten" >> $GITHUB_PATH
-          # Set environment variables
           echo "EMSDK=$(pwd)" >> $GITHUB_ENV
           echo "EM_CONFIG=$(pwd)/.emscripten" >> $GITHUB_ENV
-          echo "EMSDK_NODE=$(pwd)/node/*/bin/node" >> $GITHUB_ENV
 
-      - name: Setup Node for npmjs.org
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          registry-url: https://registry.npmjs.org
 
       - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential jq
+
+      - name: Update package.json version
+        working-directory: contrib/wasm
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
+          echo "Updating package.json version to $VERSION"
+          jq --arg version "$VERSION" '.version = $version' src/package.json.template > src/package.json.template.tmp
+          mv src/package.json.template.tmp src/package.json.template
+          echo "Updated template version: $(jq -r '.version' src/package.json.template)"
 
-      - name: Sync package.json version
+      - name: Build WASM modules (once)
         working-directory: contrib/wasm
-        run: npm version $VERSION --no-git-tag-version --allow-same-version
-
-      - name: Build WASM modules
-        working-directory: contrib/wasm
-        run: npm run build
+        run: |
+          echo "Building WASM modules..."
+          npm run build
+          echo "Build completed. Contents of dist:"
+          ls -la dist/
 
       - name: Run tests
         working-directory: contrib/wasm
-        run: npm test
+        run: |
+          echo "Running tests..."
+          npm test
 
-      - name: Authenticate to npmjs.org
-        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" >> ~/.npmrc
-
-      - name: Publish to npmjs.org
+      - name: Publish to NPM
         working-directory: contrib/wasm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
-        run: npm publish --access public
-
-      - name: Setup Node for GitHub Packages
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          registry-url: https://npm.pkg.github.com
-          always-auth: true
-          scope: '@rymote'
-
-      - name: Authenticate to GitHub Packages
-        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+        run: |
+          echo "Setting up NPM authentication..."
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > ~/.npmrc
+          echo "Publishing to NPM..."
+          npm publish --registry https://registry.npmjs.org --access public --ignore-scripts
 
       - name: Publish to GitHub Packages
         working-directory: contrib/wasm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm publish --registry https://npm.pkg.github.com --access public
+        run: |
+          echo "Setting up GitHub Packages authentication..."
+          cat > ~/.npmrc << EOF
+          //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
+          @rymote:registry=https://npm.pkg.github.com
+          EOF
+          echo "Publishing to GitHub Packages..."
+          npm publish --registry https://npm.pkg.github.com --access public --ignore-scripts
 
-      - name: Prepare release assets
+      - name: Prepare GitHub Release Assets
+        if: startsWith(github.ref, 'refs/tags/')
         working-directory: contrib/wasm
         run: |
-          # Create release directory
+          echo "Preparing release assets..."
           mkdir -p release-assets
           
-          # Copy WASM files and JS modules
+          # Copy WASM files and JS loaders
           cp dist/*.wasm release-assets/
           cp dist/kyber512_wasm.js release-assets/
           cp dist/kyber768_wasm.js release-assets/
           cp dist/kyber1024_wasm.js release-assets/
           
-          # Copy TypeScript definitions
+          # Copy TypeScript definitions and docs
           cp dist/kyber.d.ts release-assets/
-          
-          # Copy documentation
           cp README.md release-assets/
           
-          # Create a usage example for raw WASM
+          # Create usage documentation
           cat > release-assets/USAGE.md << 'EOF'
-          # Using Kyber WASM Files Directly
+          # Kyber WASM Direct Usage
           
-          This release contains the compiled WASM files that can be used in any JavaScript runtime:
+          Download these files to use Kyber WASM directly without npm.
           
-          ## Files Included:
-          - `kyber512_wasm.wasm` - Kyber-512 WASM binary
-          - `kyber768_wasm.wasm` - Kyber-768 WASM binary  
-          - `kyber1024_wasm.wasm` - Kyber-1024 WASM binary
-          - `kyber512_wasm.js` - Emscripten-generated JS loader for Kyber-512
-          - `kyber768_wasm.js` - Emscripten-generated JS loader for Kyber-768
-          - `kyber1024_wasm.js` - Emscripten-generated JS loader for Kyber-1024
+          ## Files Included
+          - `kyber512_wasm.wasm` + `kyber512_wasm.js` - Kyber-512 
+          - `kyber768_wasm.wasm` + `kyber768_wasm.js` - Kyber-768
+          - `kyber1024_wasm.wasm` + `kyber1024_wasm.js` - Kyber-1024
           - `kyber.d.ts` - TypeScript definitions
           
-          ## Basic Usage Example:
+          ## Quick Example
           ```javascript
-          // Load the WASM module directly
           import Kyber512Module from './kyber512_wasm.js';
           
           const module = await Kyber512Module();
           
-          // Allocate memory for keys
-          const pkPtr = module._malloc(800);  // Public key size for Kyber-512
-          const skPtr = module._malloc(1632); // Secret key size for Kyber-512
+          // Allocate memory
+          const pkPtr = module._malloc(800);   // Public key
+          const skPtr = module._malloc(1632);  // Secret key
           
           // Generate keypair
           const result = module._kyber512_keypair(pkPtr, skPtr);
           
-          // Read the keys
+          // Read keys
           const publicKey = new Uint8Array(800);
-          const secretKey = new Uint8Array(1632);
           for (let i = 0; i < 800; i++) {
             publicKey[i] = module.getValue(pkPtr + i, 'i8') & 0xFF;
-          }
-          for (let i = 0; i < 1632; i++) {
-            secretKey[i] = module.getValue(skPtr + i, 'i8') & 0xFF;
           }
           
           // Clean up
@@ -174,63 +157,71 @@ jobs:
           module._free(skPtr);
           ```
           
-          ## Key Sizes:
-          - **Kyber-512**: Public key: 800 bytes, Secret key: 1632 bytes, Ciphertext: 768 bytes
-          - **Kyber-768**: Public key: 1184 bytes, Secret key: 2400 bytes, Ciphertext: 1088 bytes  
-          - **Kyber-1024**: Public key: 1568 bytes, Secret key: 3168 bytes, Ciphertext: 1568 bytes
-          - **Shared Secret**: 32 bytes (all variants)
+          ## Available Functions
+          ### Basic Operations
+          - `_kyber512_keypair(pk, sk)` - Generate Kyber-512 keypair
+          - `_kyber512_enc(ct, ss, pk)` - Kyber-512 encapsulation  
+          - `_kyber512_dec(ss, ct, sk)` - Kyber-512 decapsulation
+          - Similar for `_kyber768_*` and `_kyber1024_*`
           
-          ## Available Functions:
-          - `_kyber512_keypair(pk_ptr, sk_ptr)` - Generate Kyber-512 keypair
-          - `_kyber512_enc(ct_ptr, ss_ptr, pk_ptr)` - Kyber-512 encapsulation
-          - `_kyber512_dec(ss_ptr, ct_ptr, sk_ptr)` - Kyber-512 decapsulation
-          - Similar functions available for `_kyber768_*` and `_kyber1024_*`
+          ### Seeded Operations (Deterministic)
+          - `_kyber512_keypair_seeded(pk, sk, seed)` - Seeded keypair (64-byte seed)
+          - `_kyber512_enc_seeded(ct, ss, pk, seed)` - Seeded encapsulation (32-byte seed)
+          - Similar for `_kyber768_*` and `_kyber1024_*`
           
-          For a higher-level API, use the npm package: `npm install @rymote/kyber-wasm`
+          ## Key Sizes
+          - **Kyber-512**: pk=800, sk=1632, ct=768, ss=32 bytes
+          - **Kyber-768**: pk=1184, sk=2400, ct=1088, ss=32 bytes  
+          - **Kyber-1024**: pk=1568, sk=3168, ct=1568, ss=32 bytes
+          
+          ## For Easier Usage
+          ```bash
+          npm install @rymote/kyber-wasm
+          ```
           EOF
           
           # Create checksums
           cd release-assets
-          sha256sum *.wasm *.js *.ts > SHA256SUMS.txt
+          sha256sum *.wasm *.js *.d.ts > SHA256SUMS.txt
           cd ..
           
-          # Create archive
+          # Create archives
           cd release-assets
           zip -r ../kyber-wasm-v$VERSION.zip .
           tar -czf ../kyber-wasm-v$VERSION.tar.gz .
           cd ..
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
         with:
           name: "Kyber WASM v${{ env.VERSION }}"
           body: |
-            ## 🚀 Kyber WASM Release v${{ env.VERSION }}
+            ## 🚀 Kyber WASM v${{ env.VERSION }}
             
-            This release contains both the npm package and raw WASM files for Kyber post-quantum cryptography.
+            Post-quantum cryptography for JavaScript with deterministic operations support.
             
-            ### 📦 NPM Package
+            ### 📦 NPM Installation
             ```bash
             npm install @rymote/kyber-wasm@${{ env.VERSION }}
             ```
             
-            ### 🔧 Raw WASM Files
-            Download the assets below to use the WASM files directly in any JavaScript runtime.
+            ### 🔧 Direct WASM Usage
+            Download the files below to use WASM directly in any JavaScript runtime.
             
-            ### 📋 What's Included
-            - ✅ Kyber-512, Kyber-768, and Kyber-1024 implementations
-            - ✅ Browser and Node.js compatibility
-            - ✅ TypeScript definitions
-            - ✅ Usage examples and documentation
-            - ✅ SHA256 checksums for verification
+            ### ✨ New Features
+            - ✅ **Seeded operations** - Deterministic keypair and encapsulation
+            - ✅ **All Kyber variants** - 512, 768, 1024 bit security levels
+            - ✅ **Cross-platform** - Browser and Node.js compatible
+            - ✅ **TypeScript support** - Full type definitions included
+            - ✅ **Memory safe** - Proper WASM memory management
             
             ### 🔒 Security
-            - Uses cryptographically secure random number generation
-            - Memory-safe WASM implementation
-            - Based on the official NIST PQC reference implementation
+            - Based on official NIST PQC reference implementation
+            - Cryptographically secure random number generation
+            - Memory-safe WebAssembly implementation
             
-            See `USAGE.md` in the archive for direct WASM usage examples.
+            See `USAGE.md` for direct WASM integration examples.
           files: |
             contrib/wasm/kyber-wasm-v${{ env.VERSION }}.zip
             contrib/wasm/kyber-wasm-v${{ env.VERSION }}.tar.gz

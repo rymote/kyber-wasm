@@ -1,17 +1,26 @@
 import Kyber512Module from './kyber512_wasm.js';
 
+/**
+ * Kyber-512 post-quantum key encapsulation mechanism
+ * @class
+ */
 export class Kyber512 {
   constructor() {
     this.module = null;
     this.ready = false;
   }
 
+  /**
+   * Initialize the WASM module
+   * @async
+   * @returns {Promise<void>}
+   * @throws {Error} If module initialization fails
+   */
   async init() {
     if (this.ready) return;
     
     this.module = await Kyber512Module();
     
-    // Module is ready when it's loaded (based on debug test)
     if (typeof this.module._malloc !== 'function') {
       throw new Error('WASM module not properly initialized - malloc unavailable');
     }
@@ -19,9 +28,109 @@ export class Kyber512 {
     this.ready = true;
   }
 
-  keypair() {
+  /**
+   * Generate a keypair (random or deterministic)
+   * @param {Uint8Array} [seed] - Optional 64-byte seed for deterministic generation
+   * @returns {{ publicKey: Uint8Array, secretKey: Uint8Array }} Generated keypair
+   * @throws {Error} If module not initialized or key generation fails
+   * @example
+   * // Random keypair
+   * const { publicKey, secretKey } = kyber.keypair();
+   * 
+   * // Deterministic keypair
+   * const seed = generateSeed(64);
+   * const { publicKey, secretKey } = kyber.keypair(seed);
+   */
+  keypair(seed) {
     if (!this.ready) throw new Error('Module not initialized. Call init() first.');
     
+    if (seed !== undefined) {
+      if (!(seed instanceof Uint8Array) || seed.length !== 64) {
+        throw new Error('Seed must be a Uint8Array of exactly 64 bytes (2 * KYBER_SYMBYTES).');
+      }
+      return this._keypairSeeded(seed);
+    }
+    
+    return this._keypairRandom();
+  }
+
+  /**
+   * Encapsulate a shared secret (random or deterministic)
+   * @param {Uint8Array} publicKey - 800-byte public key
+   * @param {Uint8Array} [seed] - Optional 32-byte seed for deterministic encapsulation
+   * @returns {{ ciphertext: Uint8Array, sharedSecret: Uint8Array }} Encapsulation result
+   * @throws {Error} If invalid parameters or encapsulation fails
+   * @example
+   * // Random encapsulation
+   * const { ciphertext, sharedSecret } = kyber.encapsulate(publicKey);
+   * 
+   * // Deterministic encapsulation
+   * const seed = generateSeed(32);
+   * const { ciphertext, sharedSecret } = kyber.encapsulate(publicKey, seed);
+   */
+  encapsulate(publicKey, seed) {
+    if (!this.ready) throw new Error('Module not initialized. Call init() first.');
+    if (!(publicKey instanceof Uint8Array) || publicKey.length !== 800) {
+      throw new Error('Invalid public key. Must be Uint8Array of 800 bytes.');
+    }
+    
+    if (seed !== undefined) {
+      if (!(seed instanceof Uint8Array) || seed.length !== 32) {
+        throw new Error('Seed must be a Uint8Array of exactly 32 bytes (KYBER_SYMBYTES).');
+      }
+      return this._encapsulateSeeded(publicKey, seed);
+    }
+    
+    return this._encapsulateRandom(publicKey);
+  }
+
+  /**
+   * Decapsulate a shared secret
+   * @param {Uint8Array} ciphertext - 768-byte ciphertext
+   * @param {Uint8Array} secretKey - 1632-byte secret key
+   * @returns {Uint8Array} 32-byte shared secret
+   * @throws {Error} If invalid parameters or decapsulation fails
+   * @example
+   * const sharedSecret = kyber.decapsulate(ciphertext, secretKey);
+   */
+  decapsulate(ciphertext, secretKey) {
+    if (!this.ready) throw new Error('Module not initialized. Call init() first.');
+    if (!(ciphertext instanceof Uint8Array) || ciphertext.length !== 768) {
+      throw new Error('Invalid ciphertext. Must be Uint8Array of 768 bytes.');
+    }
+    if (!(secretKey instanceof Uint8Array) || secretKey.length !== 1632) {
+      throw new Error('Invalid secret key. Must be Uint8Array of 1632 bytes.');
+    }
+    
+    const ctPtr = this.module._malloc(768);
+    const skPtr = this.module._malloc(1632);
+    const ssPtr = this.module._malloc(32);
+    
+    try {
+      this.module.writeArrayToMemory(ciphertext, ctPtr);
+      this.module.writeArrayToMemory(secretKey, skPtr);
+      
+      const result = this.module._kyber512_dec(ssPtr, ctPtr, skPtr);
+      if (result !== 0) throw new Error('Decapsulation failed');
+      
+      const sharedSecret = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) {
+        sharedSecret[i] = this.module.getValue(ssPtr + i, 'i8') & 0xFF;
+      }
+      return sharedSecret;
+    } finally {
+      this.module._free(ctPtr);
+      this.module._free(skPtr);
+      this.module._free(ssPtr);
+    }
+  }
+
+  /**
+   * Generate a random keypair (internal)
+   * @private
+   * @returns {{ publicKey: Uint8Array, secretKey: Uint8Array }}
+   */
+  _keypairRandom() {
     const pkPtr = this.module._malloc(800);
     const skPtr = this.module._malloc(1632);
     
@@ -29,7 +138,6 @@ export class Kyber512 {
       const result = this.module._kyber512_keypair(pkPtr, skPtr);
       if (result !== 0) throw new Error('Key generation failed');
       
-      // Read data using getValue (convert signed to unsigned)
       const publicKey = new Uint8Array(800);
       const secretKey = new Uint8Array(1632);
       for (let i = 0; i < 800; i++) {
@@ -46,23 +154,57 @@ export class Kyber512 {
     }
   }
 
-  encapsulate(publicKey) {
-    if (!this.ready) throw new Error('Module not initialized. Call init() first.');
-    if (!(publicKey instanceof Uint8Array)) throw new Error('Public key must be Uint8Array');
-    if (publicKey.length !== 800) throw new Error('Invalid public key length. Expected 800 bytes.');
+  /**
+   * Generate a deterministic keypair from seed (internal)
+   * @private
+   * @param {Uint8Array} seed - 64-byte seed
+   * @returns {{ publicKey: Uint8Array, secretKey: Uint8Array }}
+   */
+  _keypairSeeded(seed) {
+    const pkPtr = this.module._malloc(800);
+    const skPtr = this.module._malloc(1632);
+    const seedPtr = this.module._malloc(64);
     
+    try {
+      this.module.writeArrayToMemory(seed, seedPtr);
+      
+      const result = this.module._kyber512_keypair_seeded(pkPtr, skPtr, seedPtr);
+      if (result !== 0) throw new Error('Seeded key generation failed');
+      
+      const publicKey = new Uint8Array(800);
+      const secretKey = new Uint8Array(1632);
+      for (let i = 0; i < 800; i++) {
+        publicKey[i] = this.module.getValue(pkPtr + i, 'i8') & 0xFF;
+      }
+      for (let i = 0; i < 1632; i++) {
+        secretKey[i] = this.module.getValue(skPtr + i, 'i8') & 0xFF;
+      }
+      
+      return { publicKey, secretKey };
+    } finally {
+      this.module._free(pkPtr);
+      this.module._free(skPtr);
+      this.module._free(seedPtr);
+    }
+  }
+
+  /**
+   * Random encapsulation (internal)
+   * @private
+   * @param {Uint8Array} publicKey
+   * @returns {{ ciphertext: Uint8Array, sharedSecret: Uint8Array }}
+   */
+  _encapsulateRandom(publicKey) {
     const pkPtr = this.module._malloc(800);
     const ctPtr = this.module._malloc(768);
     const ssPtr = this.module._malloc(32);
     
     try {
-      // Write public key using writeArrayToMemory
       this.module.writeArrayToMemory(publicKey, pkPtr);
       
       const result = this.module._kyber512_enc(ctPtr, ssPtr, pkPtr);
       if (result !== 0) throw new Error('Encapsulation failed');
       
-      // Read results using getValue (convert signed to unsigned)
       const ciphertext = new Uint8Array(768);
       const sharedSecret = new Uint8Array(32);
       for (let i = 0; i < 768; i++) {
@@ -80,37 +222,41 @@ export class Kyber512 {
     }
   }
 
-  decapsulate(ciphertext, secretKey) {
-    if (!this.ready) throw new Error('Module not initialized. Call init() first.');
-    if (!(ciphertext instanceof Uint8Array)) throw new Error('Ciphertext must be Uint8Array');
-    if (!(secretKey instanceof Uint8Array)) throw new Error('Secret key must be Uint8Array');
-    if (ciphertext.length !== 768) throw new Error('Invalid ciphertext length. Expected 768 bytes.');
-    if (secretKey.length !== 1632) throw new Error('Invalid secret key length. Expected 1632 bytes.');
-    
+  /**
+   * Deterministic encapsulation with seed (internal)
+   * @private
+   * @param {Uint8Array} publicKey
+   * @param {Uint8Array} seed - 32-byte seed
+   * @returns {{ ciphertext: Uint8Array, sharedSecret: Uint8Array }}
+   */
+  _encapsulateSeeded(publicKey, seed) {
+    const pkPtr = this.module._malloc(800);
     const ctPtr = this.module._malloc(768);
-    const skPtr = this.module._malloc(1632);
     const ssPtr = this.module._malloc(32);
+    const seedPtr = this.module._malloc(32);
     
     try {
-      // Write input data using writeArrayToMemory
-      this.module.writeArrayToMemory(ciphertext, ctPtr);
-      this.module.writeArrayToMemory(secretKey, skPtr);
+      this.module.writeArrayToMemory(publicKey, pkPtr);
+      this.module.writeArrayToMemory(seed, seedPtr);
       
-      const result = this.module._kyber512_dec(ssPtr, ctPtr, skPtr);
-      if (result !== 0) throw new Error('Decapsulation failed');
+      const result = this.module._kyber512_enc_seeded(ctPtr, ssPtr, pkPtr, seedPtr);
+      if (result !== 0) throw new Error('Seeded encapsulation failed');
       
-      // Read result using getValue (convert signed to unsigned)
+      const ciphertext = new Uint8Array(768);
       const sharedSecret = new Uint8Array(32);
+      for (let i = 0; i < 768; i++) {
+        ciphertext[i] = this.module.getValue(ctPtr + i, 'i8') & 0xFF;
+      }
       for (let i = 0; i < 32; i++) {
         sharedSecret[i] = this.module.getValue(ssPtr + i, 'i8') & 0xFF;
       }
-      return sharedSecret;
+      
+      return { ciphertext, sharedSecret };
     } finally {
+      this.module._free(pkPtr);
       this.module._free(ctPtr);
-      this.module._free(skPtr);
       this.module._free(ssPtr);
+      this.module._free(seedPtr);
     }
   }
 }
-
-export default Kyber512;

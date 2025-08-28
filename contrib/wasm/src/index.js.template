@@ -1,15 +1,82 @@
-// Main entry point for Kyber WASM modules
-export { Kyber512 } from './kyber512.js';
-export { Kyber768 } from './kyber768.js';
-export { Kyber1024 } from './kyber1024.js';
+/**
+ * Kyber WASM - Post-quantum key encapsulation mechanism
+ * @module kyber-wasm
+ */
 
-// Default export with all classes
 import { Kyber512 } from './kyber512.js';
 import { Kyber768 } from './kyber768.js';
 import { Kyber1024 } from './kyber1024.js';
 
-export default {
+/**
+ * Generate a cryptographically secure random seed
+ * @param {number} [length=64] - Seed length in bytes (64 for keypair, 32 for encapsulation)
+ * @returns {Uint8Array} Random seed
+ * @throws {Error} If no secure random number generator is available
+ */
+export function generateSeed(length = 64) {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    return crypto.getRandomValues(new Uint8Array(length));
+  }
+  
+  if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.getRandomValues) {
+    return globalThis.crypto.getRandomValues(new Uint8Array(length));
+  }
+  
+  throw new Error('No secure random number generator available');
+}
+
+/**
+ * Create a deterministic seed from a string (for testing only - not cryptographically secure)
+ * @param {string} input - Input string
+ * @param {number} [length=64] - Output seed length
+ * @returns {Uint8Array} Deterministic seed
+ * @warning This is NOT cryptographically secure! Only use for testing.
+ */
+export function seedFromString(input, length = 64) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  const seed = new Uint8Array(length);
+  
+  // Simple expansion - NOT cryptographically secure
+  for (let i = 0; i < length; i++) {
+    seed[i] = data[i % data.length] ^ (i & 0xFF);
+  }
+  
+  return seed;
+}
+
+// Export Kyber classes
+export { Kyber512, Kyber768, Kyber1024 };
+
+/**
+ * All available Kyber variants
+ */
+export const KyberVariants = {
   Kyber512,
-  Kyber768,
+  Kyber768, 
   Kyber1024
+};
+
+/**
+ * Key and ciphertext sizes for each variant
+ */
+export const KyberSizes = {
+  Kyber512: {
+    publicKey: 800,
+    secretKey: 1632,
+    ciphertext: 768,
+    sharedSecret: 32
+  },
+  Kyber768: {
+    publicKey: 1184,
+    secretKey: 2400,
+    ciphertext: 1088,
+    sharedSecret: 32
+  },
+  Kyber1024: {
+    publicKey: 1568,
+    secretKey: 3168,
+    ciphertext: 1568,
+    sharedSecret: 32
+  }
 };

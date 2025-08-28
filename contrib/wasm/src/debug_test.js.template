@@ -1,74 +1,215 @@
-// Debug test to understand what's happening with WASM module
 import Kyber512Module from './kyber512_wasm.js';
 
+/**
+ * Debug test to verify WASM module functionality including seeded operations
+ */
 async function debugTest() {
-  console.log('Starting debug test...');
-  
+  console.log('🔍 Starting comprehensive debug test...\n');
+
   try {
-    console.log('1. Loading module...');
+    // Step 1: Load module
+    console.log('1. Loading WASM module...');
     const module = await Kyber512Module();
-    console.log('2. Module loaded:', typeof module);
-    console.log('3. Module properties:', Object.keys(module).slice(0, 10));
-    
-    console.log('4. Checking calledRun:', module.calledRun);
-    console.log('5. Checking HEAPU8:', !!module.HEAPU8);
-    console.log('6. Checking _malloc:', typeof module._malloc);
-    
-    if (!module.calledRun) {
-      console.log('7. Waiting for runtime initialization...');
-      await new Promise(resolve => {
-        module.onRuntimeInitialized = () => {
-          console.log('8. Runtime initialized!');
-          resolve();
-        };
-      });
-    }
-    
-    console.log('9. After init - HEAPU8:', !!module.HEAPU8);
-    console.log('10. After init - _malloc:', typeof module._malloc);
-    console.log('11. Module buffer property:', !!module.buffer);
-    console.log('12. Module memory property:', !!module.memory);
-    console.log('13. Module wasmMemory property:', !!module.wasmMemory);
-    
-    // List all properties that might be memory related
-    const memoryProps = Object.keys(module).filter(key => 
-      key.toLowerCase().includes('mem') || 
-      key.toLowerCase().includes('heap') || 
-      key.toLowerCase().includes('buffer')
-    );
-    console.log('14. Memory-related properties:', memoryProps);
-    
-    if (module._malloc) {
-      console.log('15. Testing malloc...');
-      const ptr = module._malloc(32);
-      console.log('16. Malloc result:', ptr);
-      
-      if (ptr) {
-        // Try to access memory different ways
-        console.log('17. Testing writeArrayToMemory...');
-        const testData = new Uint8Array([1, 2, 3, 4]);
-        try {
-          module.writeArrayToMemory(testData, ptr);
-          console.log('17a. writeArrayToMemory successful');
-          
-          // Try getValue to read back
-          const val0 = module.getValue(ptr, 'i8');
-          const val1 = module.getValue(ptr + 1, 'i8');
-          console.log('17b. Read back values:', val0, val1);
-        } catch (e) {
-          console.log('17c. writeArrayToMemory failed:', e.message);
-        }
-        
-        module._free(ptr);
-        console.log('18. Free successful');
+    console.log('✅ Module loaded:', typeof module);
+
+    // Step 2: Check available functions
+    console.log('\n2. Checking available functions...');
+    const functions = Object.keys(module).filter(key => key.startsWith('_kyber') || key.startsWith('_malloc') || key.startsWith('_free'));
+    console.log('📋 Available functions:', functions);
+
+    // Step 3: Check required functions exist
+    const requiredFunctions = [
+      '_malloc', '_free',
+      '_kyber512_keypair', '_kyber512_enc', '_kyber512_dec',
+      '_kyber512_keypair_seeded', '_kyber512_enc_seeded'
+    ];
+
+    console.log('\n3. Verifying required functions...');
+    for (const func of requiredFunctions) {
+      const exists = typeof module[func] === 'function';
+      console.log(`${exists ? '✅' : '❌'} ${func}: ${exists ? 'available' : 'MISSING'}`);
+      if (!exists && func.includes('seeded')) {
+        console.log(`⚠️  Seeded function ${func} not found - may need to rebuild with seeded functions`);
       }
     }
+
+    // Step 4: Check memory functions
+    console.log('\n4. Testing memory management...');
+    const testPtr = module._malloc(100);
+    console.log(`✅ malloc(100): ${testPtr}`);
+
+    if (typeof module.writeArrayToMemory === 'function') {
+      console.log('✅ writeArrayToMemory: available');
+    } else {
+      console.log('❌ writeArrayToMemory: MISSING');
+    }
+
+    if (typeof module.getValue === 'function') {
+      console.log('✅ getValue: available');
+    } else {
+      console.log('❌ getValue: MISSING');
+    }
+
+    module._free(testPtr);
+    console.log('✅ free: successful');
+
+    // Step 5: Test basic memory operations
+    console.log('\n5. Testing memory read/write...');
+    const memPtr = module._malloc(64);
+    const testData = new Uint8Array([1, 2, 3, 4, 5]);
     
-    console.log('✓ Debug test completed successfully');
+    try {
+      module.writeArrayToMemory(testData, memPtr);
+      console.log('✅ writeArrayToMemory: successful');
+
+      const readBack = [];
+      for (let i = 0; i < 5; i++) {
+        readBack.push(module.getValue(memPtr + i, 'i8') & 0xFF);
+      }
+      console.log(`✅ Read back: [${readBack.join(', ')}]`);
+      
+      const dataMatches = testData.every((v, i) => v === readBack[i]);
+      console.log(`✅ Data integrity: ${dataMatches}`);
+    } finally {
+      module._free(memPtr);
+    }
+
+    // Step 6: Test random keypair generation
+    console.log('\n6. Testing random keypair generation...');
+    const pkPtr = module._malloc(800);
+    const skPtr = module._malloc(1632);
+
+    try {
+      const result = module._kyber512_keypair(pkPtr, skPtr);
+      console.log(`✅ kyber512_keypair result: ${result}`);
+
+      // Read a few bytes to verify data was written
+      const pkSample = [];
+      for (let i = 0; i < 8; i++) {
+        pkSample.push(module.getValue(pkPtr + i, 'i8') & 0xFF);
+      }
+      console.log(`✅ Public key sample: [${pkSample.map(x => x.toString(16).padStart(2, '0')).join(', ')}]`);
+
+    } finally {
+      module._free(pkPtr);
+      module._free(skPtr);
+    }
+
+    // Step 7: Test seeded keypair generation (if available)
+    if (typeof module._kyber512_keypair_seeded === 'function') {
+      console.log('\n7. Testing seeded keypair generation...');
+      
+      const seedPtr = module._malloc(64);
+      const pkSeededPtr = module._malloc(800);
+      const skSeededPtr = module._malloc(1632);
+
+      try {
+        // Create deterministic seed
+        const seed = new Uint8Array(64);
+        for (let i = 0; i < 64; i++) {
+          seed[i] = (i * 3 + 42) & 0xFF; // Deterministic pattern
+        }
+        
+        module.writeArrayToMemory(seed, seedPtr);
+        console.log(`✅ Seed written: [${Array.from(seed.slice(0, 8)).map(x => x.toString(16).padStart(2, '0')).join(', ')}...]`);
+
+        const seededResult = module._kyber512_keypair_seeded(pkSeededPtr, skSeededPtr, seedPtr);
+        console.log(`✅ kyber512_keypair_seeded result: ${seededResult}`);
+
+        // Test deterministic behavior - same seed should give same result
+        const pkSeededPtr2 = module._malloc(800);
+        const skSeededPtr2 = module._malloc(1632);
+        
+        try {
+          const seededResult2 = module._kyber512_keypair_seeded(pkSeededPtr2, skSeededPtr2, seedPtr);
+          
+          // Compare first 8 bytes of public keys
+          const pk1Sample = [];
+          const pk2Sample = [];
+          for (let i = 0; i < 8; i++) {
+            pk1Sample.push(module.getValue(pkSeededPtr + i, 'i8') & 0xFF);
+            pk2Sample.push(module.getValue(pkSeededPtr2 + i, 'i8') & 0xFF);
+          }
+          
+          const deterministicWorks = pk1Sample.every((v, i) => v === pk2Sample[i]);
+          console.log(`✅ Deterministic behavior: ${deterministicWorks}`);
+          console.log(`   PK1: [${pk1Sample.map(x => x.toString(16).padStart(2, '0')).join(', ')}]`);
+          console.log(`   PK2: [${pk2Sample.map(x => x.toString(16).padStart(2, '0')).join(', ')}]`);
+          
+        } finally {
+          module._free(pkSeededPtr2);
+          module._free(skSeededPtr2);
+        }
+
+      } finally {
+        module._free(seedPtr);
+        module._free(pkSeededPtr);
+        module._free(skSeededPtr);
+      }
+    } else {
+      console.log('\n7. ⚠️  Seeded keypair function not available - may need to rebuild');
+    }
+
+    // Step 8: Test seeded encapsulation (if available)
+    if (typeof module._kyber512_enc_seeded === 'function') {
+      console.log('\n8. Testing seeded encapsulation...');
+      
+      // Generate a keypair first
+      const pkPtr = module._malloc(800);
+      const skPtr = module._malloc(1632);
+      
+      try {
+        module._kyber512_keypair(pkPtr, skPtr);
+        
+        const encSeedPtr = module._malloc(32);
+        const ctPtr = module._malloc(768);
+        const ssPtr = module._malloc(32);
+        
+        try {
+          // Create 32-byte encapsulation seed
+          const encSeed = new Uint8Array(32);
+          for (let i = 0; i < 32; i++) {
+            encSeed[i] = (i * 7 + 99) & 0xFF;
+          }
+          
+          module.writeArrayToMemory(encSeed, encSeedPtr);
+          
+          const encResult = module._kyber512_enc_seeded(ctPtr, ssPtr, pkPtr, encSeedPtr);
+          console.log(`✅ kyber512_enc_seeded result: ${encResult}`);
+          
+          // Read shared secret sample
+          const ssSample = [];
+          for (let i = 0; i < 8; i++) {
+            ssSample.push(module.getValue(ssPtr + i, 'i8') & 0xFF);
+          }
+          console.log(`✅ Shared secret sample: [${ssSample.map(x => x.toString(16).padStart(2, '0')).join(', ')}]`);
+          
+        } finally {
+          module._free(encSeedPtr);
+          module._free(ctPtr);
+          module._free(ssPtr);
+        }
+        
+      } finally {
+        module._free(pkPtr);
+        module._free(skPtr);
+      }
+    } else {
+      console.log('\n8. ⚠️  Seeded encapsulation function not available - may need to rebuild');
+    }
+
+    console.log('\n🎉 Debug test completed successfully!');
     
+    // Final summary
+    console.log('\n📊 Function availability summary:');
+    console.log(`• Basic functions: ${requiredFunctions.slice(0, 5).every(f => typeof module[f] === 'function') ? '✅' : '❌'}`);
+    console.log(`• Seeded functions: ${requiredFunctions.slice(5).every(f => typeof module[f] === 'function') ? '✅' : '❌'}`);
+    console.log(`• Memory operations: ${typeof module.writeArrayToMemory === 'function' && typeof module.getValue === 'function' ? '✅' : '❌'}`);
+
   } catch (error) {
     console.error('❌ Debug test failed:', error);
+    console.error('Stack trace:', error.stack);
   }
 }
 
-debugTest();
+debugTest().catch(console.error);

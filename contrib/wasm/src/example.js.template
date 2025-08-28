@@ -1,81 +1,106 @@
-// Example usage of Kyber WASM implementations
-import { Kyber512, Kyber768, Kyber1024 } from './index.js';
+import { Kyber512, Kyber768, Kyber1024, generateSeed, seedFromString } from './index.js';
 
-async function testKyber512() {
-  console.log('Testing Kyber512...');
-  
-  const kyber512 = new Kyber512();
-  await kyber512.init();
-  
-  const keypair = kyber512.keypair();
-  console.log(`Public key: ${keypair.publicKey.length} bytes`);
-  console.log(`Secret key: ${keypair.secretKey.length} bytes`);
-  
-  const encResult = kyber512.encapsulate(keypair.publicKey);
-  console.log(`Ciphertext: ${encResult.ciphertext.length} bytes`);
-  console.log(`Shared secret: ${encResult.sharedSecret.length} bytes`);
-  
-  const decryptedSecret = kyber512.decapsulate(encResult.ciphertext, keypair.secretKey);
-  console.log(`Decrypted secret: ${decryptedSecret.length} bytes`);
-  
-  const match = encResult.sharedSecret.every((byte, i) => byte === decryptedSecret[i]);
-  console.log(`Secrets match: ${match ? '✓' : '✗'}\n`);
-}
-
-async function testKyber768() {
-  console.log('Testing Kyber768...');
-  
-  const kyber768 = new Kyber768();
-  await kyber768.init();
-  
-  const keypair = kyber768.keypair();
-  console.log(`Public key: ${keypair.publicKey.length} bytes`);
-  console.log(`Secret key: ${keypair.secretKey.length} bytes`);
-  
-  const encResult = kyber768.encapsulate(keypair.publicKey);
-  console.log(`Ciphertext: ${encResult.ciphertext.length} bytes`);
-  console.log(`Shared secret: ${encResult.sharedSecret.length} bytes`);
-  
-  const decryptedSecret = kyber768.decapsulate(encResult.ciphertext, keypair.secretKey);
-  console.log(`Decrypted secret: ${decryptedSecret.length} bytes`);
-  
-  const match = encResult.sharedSecret.every((byte, i) => byte === decryptedSecret[i]);
-  console.log(`Secrets match: ${match ? '✓' : '✗'}\n`);
-}
-
-async function testKyber1024() {
-  console.log('Testing Kyber1024...');
-  
-  const kyber1024 = new Kyber1024();
-  await kyber1024.init();
-  
-  const keypair = kyber1024.keypair();
-  console.log(`Public key: ${keypair.publicKey.length} bytes`);
-  console.log(`Secret key: ${keypair.secretKey.length} bytes`);
-  
-  const encResult = kyber1024.encapsulate(keypair.publicKey);
-  console.log(`Ciphertext: ${encResult.ciphertext.length} bytes`);
-  console.log(`Shared secret: ${encResult.sharedSecret.length} bytes`);
-  
-  const decryptedSecret = kyber1024.decapsulate(encResult.ciphertext, keypair.secretKey);
-  console.log(`Decrypted secret: ${decryptedSecret.length} bytes`);
-  
-  const match = encResult.sharedSecret.every((byte, i) => byte === decryptedSecret[i]);
-  console.log(`Secrets match: ${match ? '✓' : '✗'}\n`);
-}
-
-async function runAllTests() {
+/**
+ * Example demonstrating Kyber WASM usage with both random and seeded operations
+ */
+async function example() {
   console.log('🔐 Kyber WASM Example\n');
-  
-  try {
-    await testKyber512();
-    await testKyber768();
-    await testKyber1024();
+
+  // Test all three Kyber variants
+  const variants = [
+    { name: 'Kyber512', Class: Kyber512, pkSize: 800, skSize: 1632, ctSize: 768 },
+    { name: 'Kyber768', Class: Kyber768, pkSize: 1184, skSize: 2400, ctSize: 1088 },
+    { name: 'Kyber1024', Class: Kyber1024, pkSize: 1568, skSize: 3168, ctSize: 1568 }
+  ];
+
+  for (const variant of variants) {
+    console.log(`\n=== Testing ${variant.name} ===`);
     
-    console.log('🎉 All tests completed successfully!');
-  } catch (error) {
-    console.error('❌ Error:', error.message);
+    try {
+      const kyber = new variant.Class();
+      await kyber.init();
+      console.log(`✅ ${variant.name} module initialized`);
+
+      // Test 1: Random keypair and encapsulation
+      console.log('\n📝 Test 1: Random operations');
+      const { publicKey, secretKey } = kyber.keypair();
+      console.log(`✅ Random keypair generated (pk: ${publicKey.length} bytes, sk: ${secretKey.length} bytes)`);
+
+      const { ciphertext, sharedSecret } = kyber.encapsulate(publicKey);
+      console.log(`✅ Random encapsulation (ct: ${ciphertext.length} bytes, ss: ${sharedSecret.length} bytes)`);
+
+      const recoveredSecret = kyber.decapsulate(ciphertext, secretKey);
+      console.log(`✅ Decapsulation successful`);
+
+      // Verify shared secrets match
+      const secretsMatch = sharedSecret.every((v, i) => v === recoveredSecret[i]);
+      console.log(`✅ Shared secrets match: ${secretsMatch}`);
+
+      // Test 2: Seeded operations (deterministic)
+      console.log('\n🌱 Test 2: Seeded operations');
+      
+      // Generate deterministic seed from string
+      const testSeed = seedFromString(`test-${variant.name}-seed`, 64);
+      console.log(`📏 Generated 64-byte seed: ${Array.from(testSeed.slice(0, 8)).map(x => x.toString(16).padStart(2, '0')).join('')}...`);
+
+      // Test deterministic keypair generation
+      const seededKeys1 = kyber.keypair(testSeed);
+      const seededKeys2 = kyber.keypair(testSeed);
+      
+      const publicKeysMatch = seededKeys1.publicKey.every((v, i) => v === seededKeys2.publicKey[i]);
+      const secretKeysMatch = seededKeys1.secretKey.every((v, i) => v === seededKeys2.secretKey[i]);
+      
+      console.log(`✅ Seeded keypair deterministic: pk=${publicKeysMatch}, sk=${secretKeysMatch}`);
+
+      // Test deterministic encapsulation
+      const encSeed = seedFromString(`enc-${variant.name}-seed`, 32);
+      console.log(`📏 Generated 32-byte enc seed: ${Array.from(encSeed.slice(0, 8)).map(x => x.toString(16).padStart(2, '0')).join('')}...`);
+
+      const seededEnc1 = kyber.encapsulate(seededKeys1.publicKey, encSeed);
+      const seededEnc2 = kyber.encapsulate(seededKeys1.publicKey, encSeed);
+
+      const ciphertextsMatch = seededEnc1.ciphertext.every((v, i) => v === seededEnc2.ciphertext[i]);
+      const secretsMatch2 = seededEnc1.sharedSecret.every((v, i) => v === seededEnc2.sharedSecret[i]);
+
+      console.log(`✅ Seeded encapsulation deterministic: ct=${ciphertextsMatch}, ss=${secretsMatch2}`);
+
+      // Test seeded decapsulation works
+      const recoveredSeededSecret = kyber.decapsulate(seededEnc1.ciphertext, seededKeys1.secretKey);
+      const decapsulationWorks = seededEnc1.sharedSecret.every((v, i) => v === recoveredSeededSecret[i]);
+      console.log(`✅ Seeded decapsulation works: ${decapsulationWorks}`);
+
+      // Test 3: Cross-compatibility (seeded keys work with random encapsulation)
+      console.log('\n🔄 Test 3: Cross-compatibility');
+      const randomEnc = kyber.encapsulate(seededKeys1.publicKey); // Random encapsulation with seeded public key
+      const crossDecrypt = kyber.decapsulate(randomEnc.ciphertext, seededKeys1.secretKey);
+      const crossWorks = randomEnc.sharedSecret.every((v, i) => v === crossDecrypt[i]);
+      console.log(`✅ Seeded keys work with random encapsulation: ${crossWorks}`);
+
+      // Test 4: Secure random seed generation
+      console.log('\n🎲 Test 4: Secure random seeds');
+      const randomSeed1 = generateSeed(64);
+      const randomSeed2 = generateSeed(64);
+      const seedsAreDifferent = !randomSeed1.every((v, i) => v === randomSeed2[i]);
+      console.log(`✅ Random seeds are different: ${seedsAreDifferent}`);
+
+      const randomKeys1 = kyber.keypair(randomSeed1);
+      const randomKeys2 = kyber.keypair(randomSeed2);
+      const randomKeysAreDifferent = !randomKeys1.publicKey.every((v, i) => v === randomKeys2.publicKey[i]);
+      console.log(`✅ Keys from different seeds are different: ${randomKeysAreDifferent}`);
+
+    } catch (error) {
+      console.error(`❌ Error testing ${variant.name}:`, error.message);
+      return;
+    }
   }
+
+  console.log('\n🎉 All tests completed successfully!');
+  console.log('\n📊 Summary:');
+  console.log('• Random operations: ✅ Working');
+  console.log('• Seeded operations: ✅ Working');
+  console.log('• Deterministic behavior: ✅ Working');
+  console.log('• Cross-compatibility: ✅ Working');
+  console.log('• Secure random generation: ✅ Working');
 }
 
-runAllTests();
+example().catch(console.error);

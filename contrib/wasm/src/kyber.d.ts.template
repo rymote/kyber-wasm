@@ -1,110 +1,172 @@
-// TypeScript definitions for Kyber WASM modules
+/**
+ * Kyber WASM - Post-quantum key encapsulation mechanism TypeScript definitions
+ */
 
+/**
+ * A generated keypair containing public and secret keys
+ */
 export interface KeyPair {
   publicKey: Uint8Array;
   secretKey: Uint8Array;
 }
 
+/**
+ * Result of encapsulation containing ciphertext and shared secret
+ */
 export interface EncapsulationResult {
   ciphertext: Uint8Array;
   sharedSecret: Uint8Array;
 }
 
+/**
+ * Kyber-512 post-quantum key encapsulation mechanism
+ */
 export declare class Kyber512 {
   constructor();
   
   /**
-   * Initialize the WASM module. Must be called before any other operations.
+   * Initialize the WASM module
    */
   init(): Promise<void>;
   
   /**
-   * Generate a Kyber512 key pair.
-   * @returns Key pair with 800-byte public key and 1632-byte secret key
+   * Generate a keypair (random or deterministic)
+   * @param seed Optional 64-byte seed for deterministic generation
    */
-  keypair(): KeyPair;
+  keypair(seed?: Uint8Array): KeyPair;
   
   /**
-   * Encapsulate a shared secret using Kyber512.
-   * @param publicKey - 800-byte public key
-   * @returns Encapsulation result with 768-byte ciphertext and 32-byte shared secret
+   * Encapsulate a shared secret (random or deterministic)
+   * @param publicKey 800-byte public key
+   * @param seed Optional 32-byte seed for deterministic encapsulation
    */
-  encapsulate(publicKey: Uint8Array): EncapsulationResult;
+  encapsulate(publicKey: Uint8Array, seed?: Uint8Array): EncapsulationResult;
   
   /**
-   * Decapsulate a shared secret using Kyber512.
-   * @param ciphertext - 768-byte ciphertext
-   * @param secretKey - 1632-byte secret key
-   * @returns 32-byte shared secret
+   * Decapsulate a shared secret
+   * @param ciphertext 768-byte ciphertext
+   * @param secretKey 1632-byte secret key
    */
   decapsulate(ciphertext: Uint8Array, secretKey: Uint8Array): Uint8Array;
 }
 
+/**
+ * Kyber-768 post-quantum key encapsulation mechanism
+ */
 export declare class Kyber768 {
   constructor();
   
   /**
-   * Initialize the WASM module. Must be called before any other operations.
+   * Initialize the WASM module
    */
   init(): Promise<void>;
   
   /**
-   * Generate a Kyber768 key pair.
-   * @returns Key pair with 1184-byte public key and 2400-byte secret key
+   * Generate a keypair (random or deterministic)
+   * @param seed Optional 64-byte seed for deterministic generation
    */
-  keypair(): KeyPair;
+  keypair(seed?: Uint8Array): KeyPair;
   
   /**
-   * Encapsulate a shared secret using Kyber768.
-   * @param publicKey - 1184-byte public key
-   * @returns Encapsulation result with 1088-byte ciphertext and 32-byte shared secret
+   * Encapsulate a shared secret (random or deterministic)
+   * @param publicKey 1184-byte public key
+   * @param seed Optional 32-byte seed for deterministic encapsulation
    */
-  encapsulate(publicKey: Uint8Array): EncapsulationResult;
+  encapsulate(publicKey: Uint8Array, seed?: Uint8Array): EncapsulationResult;
   
   /**
-   * Decapsulate a shared secret using Kyber768.
-   * @param ciphertext - 1088-byte ciphertext
-   * @param secretKey - 2400-byte secret key
-   * @returns 32-byte shared secret
+   * Decapsulate a shared secret
+   * @param ciphertext 1088-byte ciphertext
+   * @param secretKey 2400-byte secret key
    */
   decapsulate(ciphertext: Uint8Array, secretKey: Uint8Array): Uint8Array;
 }
 
+/**
+ * Kyber-1024 post-quantum key encapsulation mechanism
+ */
 export declare class Kyber1024 {
   constructor();
   
   /**
-   * Initialize the WASM module. Must be called before any other operations.
+   * Initialize the WASM module
    */
   init(): Promise<void>;
   
   /**
-   * Generate a Kyber1024 key pair.
-   * @returns Key pair with 1568-byte public key and 3168-byte secret key
+   * Generate a keypair (random or deterministic)
+   * @param seed Optional 64-byte seed for deterministic generation
    */
-  keypair(): KeyPair;
+  keypair(seed?: Uint8Array): KeyPair;
   
   /**
-   * Encapsulate a shared secret using Kyber1024.
-   * @param publicKey - 1568-byte public key
-   * @returns Encapsulation result with 1568-byte ciphertext and 32-byte shared secret
+   * Encapsulate a shared secret (random or deterministic)
+   * @param publicKey 1568-byte public key
+   * @param seed Optional 32-byte seed for deterministic encapsulation
    */
-  encapsulate(publicKey: Uint8Array): EncapsulationResult;
+  encapsulate(publicKey: Uint8Array, seed?: Uint8Array): EncapsulationResult;
   
   /**
-   * Decapsulate a shared secret using Kyber1024.
-   * @param ciphertext - 1568-byte ciphertext
-   * @param secretKey - 3168-byte secret key
-   * @returns 32-byte shared secret
+   * Decapsulate a shared secret
+   * @param ciphertext 1568-byte ciphertext
+   * @param secretKey 3168-byte secret key
    */
   decapsulate(ciphertext: Uint8Array, secretKey: Uint8Array): Uint8Array;
 }
 
-// Default export includes all classes
-declare const kyber: {
+/**
+ * Generate a cryptographically secure random seed
+ * @param length Seed length in bytes (64 for keypair, 32 for encapsulation)
+ */
+export declare function generateSeed(length?: number): Uint8Array;
+
+/**
+ * Create a deterministic seed from a string (for testing only - not cryptographically secure)
+ * @param input Input string
+ * @param length Output seed length
+ * @warning This is NOT cryptographically secure! Only use for testing.
+ */
+export declare function seedFromString(input: string, length?: number): Uint8Array;
+
+/**
+ * All available Kyber variants
+ */
+export declare const KyberVariants: {
   Kyber512: typeof Kyber512;
   Kyber768: typeof Kyber768;
   Kyber1024: typeof Kyber1024;
 };
 
-export default kyber;
+/**
+ * Key and ciphertext sizes for each variant
+ */
+export declare const KyberSizes: {
+  Kyber512: {
+    publicKey: 800;
+    secretKey: 1632;
+    ciphertext: 768;
+    sharedSecret: 32;
+  };
+  Kyber768: {
+    publicKey: 1184;
+    secretKey: 2400;
+    ciphertext: 1088;
+    sharedSecret: 32;
+  };
+  Kyber1024: {
+    publicKey: 1568;
+    secretKey: 3168;
+    ciphertext: 1568;
+    sharedSecret: 32;
+  };
+};
+
+/**
+ * Type union of all Kyber classes
+ */
+export type KyberClass = Kyber512 | Kyber768 | Kyber1024;
+
+/**
+ * Type for Kyber variant names
+ */
+export type KyberVariant = 'Kyber512' | 'Kyber768' | 'Kyber1024';
